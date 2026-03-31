@@ -1,61 +1,68 @@
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from .database import Base
 
 
-class BaseModel:
-    is_published = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class Category(Base, BaseModel):
-    __tablename__ = "categories"
+class User(Base):
+    __tablename__ = "auth_user"
 
     id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, nullable=False)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+
+
+class Category(Base):
+    __tablename__ = "blog_category"
+
+    id = Column(Integer, primary_key=True, index=True)
+    is_published = Column(Boolean)
+    created_at = Column(DateTime)
     title = Column(String(256), nullable=False)
     description = Column(Text, nullable=False)
     slug = Column(String, unique=True, nullable=False)
 
-    posts = relationship("Post", back_populates="category")
 
-
-class Location(Base, BaseModel):
-    __tablename__ = "locations"
+class Location(Base):
+    __tablename__ = "blog_location"
 
     id = Column(Integer, primary_key=True, index=True)
+    is_published = Column(Boolean)
+    created_at = Column(DateTime)
     name = Column(String(256), nullable=False)
 
-    posts = relationship("Post", back_populates="location")
 
-
-class Post(Base, BaseModel):
-    __tablename__ = "posts"
+class Post(Base):
+    __tablename__ = "blog_post"
 
     id = Column(Integer, primary_key=True, index=True)
+    is_published = Column(Boolean)
+    created_at = Column(DateTime)
     title = Column(String(256), nullable=False)
     text = Column(Text, nullable=False)
     pub_date = Column(DateTime, nullable=False)
     image = Column(String, nullable=True)
 
-    author_id = Column(Integer, nullable=False)
-    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    author_id = Column(Integer, ForeignKey("auth_user.id"), nullable=False)
+    location_id = Column(Integer, ForeignKey("blog_location.id"), nullable=True)
+    category_id = Column(Integer, ForeignKey("blog_category.id"), nullable=True)
 
-    location = relationship("Location", back_populates="posts")
-    category = relationship("Category", back_populates="posts")
-    comments = relationship("Comment", back_populates="post", cascade="all, delete")
+    author = relationship("User")
+    location = relationship("Location")
+    category = relationship("Category")
 
 
 class Comment(Base):
-    __tablename__ = "comments"
+    __tablename__ = "blog_comment"
 
     id = Column(Integer, primary_key=True, index=True)
     text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    author_id = Column(Integer, nullable=False)
-    post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
+    created_at = Column(DateTime)
 
-    post = relationship("Post", back_populates="comments")
+    post_id = Column(Integer, ForeignKey("blog_post.id"), nullable=False)
+    author_id = Column(Integer, ForeignKey("auth_user.id"), nullable=False)
+
+    post = relationship("Post")
+    author = relationship("User")
