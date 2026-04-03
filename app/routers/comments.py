@@ -1,33 +1,36 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import crud, schemas
-from ..database import SessionLocal
+from ..database import get_db
+from ..repositories.comment_repository import CommentRepository
+from ..schemas import CommentCreate, CommentOut, CommentUpdate
 
 router = APIRouter(prefix="/comments", tags=["Comments"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-@router.get("/", response_model=list[schemas.CommentOut])
+@router.get("/", response_model=list[CommentOut])
 def read_comments(db: Session = Depends(get_db)):
-    return crud.get_comments(db)
+    return CommentRepository(db).get_all()
 
 
-@router.post("/", response_model=schemas.CommentOut)
-def create_comment(comment: schemas.CommentCreate, db: Session = Depends(get_db)):
-    return crud.create_comment(db, comment)
+@router.get("/{comment_id}", response_model=CommentOut)
+def read_comment(comment_id: int, db: Session = Depends(get_db)):
+    obj = CommentRepository(db).get_by_id(comment_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    return obj
 
 
-@router.put("/{comment_id}", response_model=schemas.CommentOut)
-def update_comment(comment_id: int, comment: schemas.CommentUpdate, db: Session = Depends(get_db)):
-    updated_comment = crud.update_comment(db, comment_id, comment)
+@router.post("/", response_model=CommentOut)
+def create_comment(comment: CommentCreate, db: Session = Depends(get_db)):
+    return CommentRepository(db).create(comment)
+
+
+@router.put("/{comment_id}", response_model=CommentOut)
+def update_comment(
+    comment_id: int, comment: CommentUpdate, db: Session = Depends(get_db)
+):
+    updated_comment = CommentRepository(db).update(comment_id, comment)
     if not updated_comment:
         raise HTTPException(status_code=404, detail="Comment not found")
     return updated_comment
@@ -35,7 +38,7 @@ def update_comment(comment_id: int, comment: schemas.CommentUpdate, db: Session 
 
 @router.delete("/{comment_id}")
 def delete_comment(comment_id: int, db: Session = Depends(get_db)):
-    deleted_comment = crud.delete_comment(db, comment_id)
+    deleted_comment = CommentRepository(db).delete(comment_id)
     if not deleted_comment:
         raise HTTPException(status_code=404, detail="Comment not found")
     return {"message": "Comment deleted successfully"}

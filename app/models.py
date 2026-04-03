@@ -1,10 +1,22 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+"""SQLAlchemy ORM models for the blog (Django-compatible schema)."""
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 
 from .database import Base
 
 
 class User(Base):
+    """Django-compatible auth_user table."""
+
     __tablename__ = "auth_user"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -15,6 +27,8 @@ class User(Base):
 
 
 class Category(Base):
+    """Blog category."""
+
     __tablename__ = "blog_category"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -26,6 +40,8 @@ class Category(Base):
 
 
 class Location(Base):
+    """Blog location."""
+
     __tablename__ = "blog_location"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -35,6 +51,8 @@ class Location(Base):
 
 
 class Post(Base):
+    """Blog post."""
+
     __tablename__ = "blog_post"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -46,8 +64,16 @@ class Post(Base):
     image = Column(String, nullable=True)
 
     author_id = Column(Integer, ForeignKey("auth_user.id"), nullable=False)
-    location_id = Column(Integer, ForeignKey("blog_location.id"), nullable=True)
-    category_id = Column(Integer, ForeignKey("blog_category.id"), nullable=True)
+    location_id = Column(
+        Integer,
+        ForeignKey("blog_location.id"),
+        nullable=True,
+    )
+    category_id = Column(
+        Integer,
+        ForeignKey("blog_category.id"),
+        nullable=True,
+    )
 
     author = relationship("User")
     location = relationship("Location")
@@ -55,6 +81,8 @@ class Post(Base):
 
 
 class Comment(Base):
+    """Comment on a post."""
+
     __tablename__ = "blog_comment"
 
     id = Column(Integer, primary_key=True, index=True)
