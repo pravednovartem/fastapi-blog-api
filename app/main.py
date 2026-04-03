@@ -1,3 +1,5 @@
+"""FastAPI application: blog API routers and root route."""
+
 from fastapi import FastAPI
 
 from .routers import categories, comments, locations, posts, users
@@ -13,4 +15,5 @@ app.include_router(comments.router)
 
 @app.get("/")
 def root():
+    """Health check: confirm API is running."""
     return {"message": "FastAPI works with Django SQLite database"}
