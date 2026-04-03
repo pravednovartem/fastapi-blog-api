@@ -12,4 +12,6 @@
 
 ```bash
 pip install -r requirements.txt
-python -m uvicorn app.main:app --port 8001
+alembic upgrade head
+uvicorn app.main:app --reload
+```
