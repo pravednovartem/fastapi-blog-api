@@ -1,7 +1,16 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+"""Движок БД, фабрика сессий и зависимость для FastAPI."""
 
-DATABASE_URL = "sqlite:///./sqlite.db"
+import os
+
+from dotenv import load_dotenv
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sqlite.db")
 
 engine = create_engine(
     DATABASE_URL,
@@ -18,6 +27,7 @@ Base = declarative_base()
 
 
 def get_db():
+    """Создать сессию БД и закрыть после запроса."""
     db = SessionLocal()
     try:
         yield db

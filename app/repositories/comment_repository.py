@@ -1,4 +1,4 @@
-"""Repository for post comments."""
+"""Репозиторий для комментариев."""
 
 from app.models import Comment
 from app.schemas import (
@@ -10,18 +10,18 @@ from sqlalchemy.orm import Session
 
 
 class CommentRepository:
-    """CRUD-style access to Comment rows."""
+    """CRUD-операции с таблицей комментариев."""
 
     def __init__(self, db: Session):
-        """Attach SQLAlchemy session."""
+        """Принять сессию SQLAlchemy."""
         self.db = db
 
     def get_all(self):
-        """Return all comments."""
+        """Вернуть все комментарии."""
         return self.db.query(Comment).all()
 
     def get_by_id(self, comment_id: int):
-        """Return comment by id or None."""
+        """Вернуть комментарий по id или None."""
         return (
             self.db.query(Comment)
             .filter(Comment.id == comment_id)
@@ -29,7 +29,7 @@ class CommentRepository:
         )
 
     def get_by_post(self, post_id: int):
-        """Return comments for a post."""
+        """Вернуть комментарии к публикации."""
         return (
             self.db.query(Comment)
             .filter(Comment.post_id == post_id)
@@ -37,7 +37,7 @@ class CommentRepository:
         )
 
     def get_by_author(self, author_id: int):
-        """Return comments by author id."""
+        """Вернуть комментарии по id автора."""
         return (
             self.db.query(Comment)
             .filter(Comment.author_id == author_id)
@@ -45,7 +45,7 @@ class CommentRepository:
         )
 
     def create(self, data: CommentCreate):
-        """Insert a comment from validated payload."""
+        """Создать комментарий из валидированных данных."""
         obj = Comment(**data.model_dump())
         self.db.add(obj)
         self.db.commit()
@@ -53,7 +53,7 @@ class CommentRepository:
         return obj
 
     def update(self, comment_id: int, data: CommentUpdate):
-        """Update comment text; return None if missing."""
+        """Обновить текст; вернуть None если не найден."""
         obj = self.get_by_id(comment_id)
         if not obj:
             return None
@@ -63,7 +63,7 @@ class CommentRepository:
         return obj
 
     def delete(self, comment_id: int):
-        """Delete comment."""
+        """Удалить комментарий."""
         obj = self.get_by_id(
             comment_id,
         )

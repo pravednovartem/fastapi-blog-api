@@ -1,4 +1,4 @@
-"""Repository for blog posts."""
+"""Репозиторий для публикаций блога."""
 
 from app.models import Comment, Post
 from app.schemas import PostCreate, PostUpdate
@@ -7,26 +7,26 @@ from sqlalchemy.orm import Session
 
 
 class PostRepository:
-    """CRUD-style access to Post rows."""
+    """CRUD-операции с таблицей публикаций."""
 
     def __init__(self, db: Session):
-        """Attach SQLAlchemy session."""
+        """Принять сессию SQLAlchemy."""
         self.db = db
 
     def get_all(self):
-        """Return all posts."""
+        """Вернуть все публикации."""
         return self.db.query(Post).all()
 
     def get_by_id(self, post_id: int):
-        """Return post by id or None."""
+        """Вернуть публикацию по id или None."""
         return self.db.query(Post).filter(Post.id == post_id).first()
 
     def get_by_author(self, author_id: int):
-        """Return posts by author id."""
+        """Вернуть публикации по id автора."""
         return self.db.query(Post).filter(Post.author_id == author_id).all()
 
     def get_by_category(self, category_id: int):
-        """Return posts in a category."""
+        """Вернуть публикации по категории."""
         return (
             self.db.query(Post)
             .filter(Post.category_id == category_id)
@@ -34,7 +34,7 @@ class PostRepository:
         )
 
     def create(self, data: PostCreate):
-        """Insert a post from validated payload."""
+        """Создать публикацию из валидированных данных."""
         obj = Post(**data.model_dump())
         self.db.add(obj)
         self.db.commit()
@@ -42,7 +42,7 @@ class PostRepository:
         return obj
 
     def update(self, post_id: int, data: PostUpdate):
-        """Update fields; return None if missing."""
+        """Обновить поля; вернуть None если не найдена."""
         obj = self.get_by_id(post_id)
         if not obj:
             return None
@@ -53,7 +53,7 @@ class PostRepository:
         return obj
 
     def delete(self, post_id: int):
-        """Delete post and its comments."""
+        """Удалить публикацию и её комментарии."""
         obj = self.get_by_id(post_id)
         if not obj:
             return None

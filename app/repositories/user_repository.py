@@ -1,4 +1,4 @@
-"""Repository for users (auth_user)."""
+"""Репозиторий для пользователей (auth_user)."""
 
 from app.models import Comment, Post, User
 from app.schemas import UserCreate, UserUpdate
@@ -7,22 +7,22 @@ from sqlalchemy.orm import Session
 
 
 class UserRepository:
-    """CRUD-style access to User rows."""
+    """CRUD-операции с таблицей пользователей."""
 
     def __init__(self, db: Session):
-        """Attach SQLAlchemy session."""
+        """Принять сессию SQLAlchemy."""
         self.db = db
 
     def get_all(self):
-        """Return all users."""
+        """Вернуть всех пользователей."""
         return self.db.query(User).all()
 
     def get_by_id(self, user_id: int):
-        """Return user by id or None."""
+        """Вернуть пользователя по id или None."""
         return self.db.query(User).filter(User.id == user_id).first()
 
     def create(self, data: UserCreate):
-        """Insert a user from validated payload."""
+        """Создать пользователя из валидированных данных."""
         obj = User(**data.model_dump())
         self.db.add(obj)
         self.db.commit()
@@ -30,7 +30,7 @@ class UserRepository:
         return obj
 
     def update(self, user_id: int, data: UserUpdate):
-        """Update fields; return None if missing."""
+        """Обновить поля; вернуть None если не найден."""
         obj = self.get_by_id(user_id)
         if not obj:
             return None
@@ -41,7 +41,7 @@ class UserRepository:
         return obj
 
     def delete(self, user_id: int):
-        """Delete user and dependent comments/posts."""
+        """Удалить пользователя и зависимые записи."""
         user = self.get_by_id(user_id)
         if not user:
             return None

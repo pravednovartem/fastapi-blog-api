@@ -1,4 +1,4 @@
-"""Repository for blog locations."""
+"""Репозиторий для локаций блога."""
 
 from app.models import Location, Post
 from app.schemas import LocationCreate, LocationUpdate
@@ -7,18 +7,18 @@ from sqlalchemy.orm import Session
 
 
 class LocationRepository:
-    """CRUD-style access to Location rows."""
+    """CRUD-операции с таблицей локаций."""
 
     def __init__(self, db: Session):
-        """Attach SQLAlchemy session."""
+        """Принять сессию SQLAlchemy."""
         self.db = db
 
     def get_all(self):
-        """Return all locations."""
+        """Вернуть все локации."""
         return self.db.query(Location).all()
 
     def get_by_id(self, location_id: int):
-        """Return location by id or None."""
+        """Вернуть локацию по id или None."""
         return (
             self.db.query(Location)
             .filter(Location.id == location_id)
@@ -26,7 +26,7 @@ class LocationRepository:
         )
 
     def create(self, data: LocationCreate):
-        """Insert a location from validated payload."""
+        """Создать локацию из валидированных данных."""
         obj = Location(**data.model_dump())
         self.db.add(obj)
         self.db.commit()
@@ -34,7 +34,7 @@ class LocationRepository:
         return obj
 
     def update(self, location_id: int, data: LocationUpdate):
-        """Update fields; return None if missing."""
+        """Обновить поля; вернуть None если не найдена."""
         obj = self.get_by_id(location_id)
         if not obj:
             return None
@@ -45,7 +45,7 @@ class LocationRepository:
         return obj
 
     def delete(self, location_id: int):
-        """Delete location; null post.location_id first."""
+        """Удалить локацию; обнулить location_id у постов."""
         obj = self.get_by_id(location_id)
         if not obj:
             return None
