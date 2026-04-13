@@ -31,7 +31,6 @@ from .schemas import (
 # Конфигурация API
 app = FastAPI(
     title="Blog API",
-    description="REST API для блога на FastAPI + SQLite",
     version="1.0.0",
 )
 
