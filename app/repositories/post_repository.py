@@ -1,8 +1,10 @@
 """Репозиторий для публикаций блога."""
 
+from app.exceptions import ConflictError, DatabaseError
 from app.models import Comment, Post
 from app.schemas import PostCreate, PostUpdate
 
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 
@@ -12,6 +14,21 @@ class PostRepository:
     def __init__(self, db: Session):
         """Принять сессию SQLAlchemy."""
         self.db = db
+
+    def _commit(self) -> None:
+        """Закоммитить транзакцию, преобразовав SQL-ошибки в доменные."""
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError(
+                "Нарушение целостности данных публикации",
+            ) from exc
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            raise DatabaseError(
+                "Сбой БД при работе с публикацией",
+            ) from exc
 
     def get_all(self):
         """Вернуть все публикации."""
@@ -37,7 +54,7 @@ class PostRepository:
         """Создать публикацию из валидированных данных."""
         obj = Post(**data.model_dump())
         self.db.add(obj)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -48,7 +65,7 @@ class PostRepository:
             return None
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, key, value)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -61,5 +78,5 @@ class PostRepository:
         for comment in q.all():
             self.db.delete(comment)
         self.db.delete(obj)
-        self.db.commit()
+        self._commit()
         return obj

@@ -1,8 +1,10 @@
 """Репозиторий для локаций блога."""
 
+from app.exceptions import ConflictError, DatabaseError
 from app.models import Location, Post
 from app.schemas import LocationCreate, LocationUpdate
 
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 
@@ -12,6 +14,21 @@ class LocationRepository:
     def __init__(self, db: Session):
         """Принять сессию SQLAlchemy."""
         self.db = db
+
+    def _commit(self) -> None:
+        """Закоммитить транзакцию, преобразовав SQL-ошибки в доменные."""
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError(
+                "Нарушение целостности данных локации",
+            ) from exc
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            raise DatabaseError(
+                "Сбой БД при работе с локацией",
+            ) from exc
 
     def get_all(self):
         """Вернуть все локации."""
@@ -29,7 +46,7 @@ class LocationRepository:
         """Создать локацию из валидированных данных."""
         obj = Location(**data.model_dump())
         self.db.add(obj)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -40,7 +57,7 @@ class LocationRepository:
             return None
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, key, value)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -54,5 +71,5 @@ class LocationRepository:
             synchronize_session=False,
         )
         self.db.delete(obj)
-        self.db.commit()
+        self._commit()
         return obj

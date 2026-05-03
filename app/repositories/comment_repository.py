@@ -1,11 +1,13 @@
 """Репозиторий для комментариев."""
 
+from app.exceptions import ConflictError, DatabaseError
 from app.models import Comment
 from app.schemas import (
     CommentCreate,
     CommentUpdate,
 )
 
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 
@@ -15,6 +17,21 @@ class CommentRepository:
     def __init__(self, db: Session):
         """Принять сессию SQLAlchemy."""
         self.db = db
+
+    def _commit(self) -> None:
+        """Закоммитить транзакцию, преобразовав SQL-ошибки в доменные."""
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError(
+                "Нарушение целостности данных комментария",
+            ) from exc
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            raise DatabaseError(
+                "Сбой БД при работе с комментарием",
+            ) from exc
 
     def get_all(self):
         """Вернуть все комментарии."""
@@ -48,7 +65,7 @@ class CommentRepository:
         """Создать комментарий из валидированных данных."""
         obj = Comment(**data.model_dump())
         self.db.add(obj)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -58,17 +75,15 @@ class CommentRepository:
         if not obj:
             return None
         obj.text = data.text
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
     def delete(self, comment_id: int):
         """Удалить комментарий."""
-        obj = self.get_by_id(
-            comment_id,
-        )
+        obj = self.get_by_id(comment_id)
         if not obj:
             return None
         self.db.delete(obj)
-        self.db.commit()
+        self._commit()
         return obj

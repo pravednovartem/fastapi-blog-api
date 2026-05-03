@@ -1,8 +1,10 @@
 """Репозиторий для категорий блога."""
 
+from app.exceptions import ConflictError, DatabaseError
 from app.models import Category, Post
 from app.schemas import CategoryCreate, CategoryUpdate
 
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 
@@ -12,6 +14,21 @@ class CategoryRepository:
     def __init__(self, db: Session):
         """Принять сессию SQLAlchemy."""
         self.db = db
+
+    def _commit(self) -> None:
+        """Закоммитить транзакцию, преобразовав SQL-ошибки в доменные."""
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError(
+                "Нарушение целостности данных категории",
+            ) from exc
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            raise DatabaseError(
+                "Сбой БД при работе с категорией",
+            ) from exc
 
     def get_all(self):
         """Вернуть все категории."""
@@ -29,7 +46,7 @@ class CategoryRepository:
         """Создать категорию из валидированных данных."""
         obj = Category(**data.model_dump())
         self.db.add(obj)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -40,7 +57,7 @@ class CategoryRepository:
             return None
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, key, value)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -54,5 +71,5 @@ class CategoryRepository:
             synchronize_session=False,
         )
         self.db.delete(obj)
-        self.db.commit()
+        self._commit()
         return obj

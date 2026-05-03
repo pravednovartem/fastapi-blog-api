@@ -1,8 +1,10 @@
 """Репозиторий для пользователей (auth_user)."""
 
+from app.exceptions import ConflictError, DatabaseError
 from app.models import Comment, Post, User
 from app.schemas import UserCreate, UserUpdate
 
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 
@@ -12,6 +14,21 @@ class UserRepository:
     def __init__(self, db: Session):
         """Принять сессию SQLAlchemy."""
         self.db = db
+
+    def _commit(self) -> None:
+        """Закоммитить транзакцию, преобразовав SQL-ошибки в доменные."""
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError(
+                "Нарушение целостности данных пользователя",
+            ) from exc
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            raise DatabaseError(
+                "Сбой БД при работе с пользователем",
+            ) from exc
 
     def get_all(self):
         """Вернуть всех пользователей."""
@@ -25,7 +42,7 @@ class UserRepository:
         """Создать пользователя из валидированных данных."""
         obj = User(**data.model_dump())
         self.db.add(obj)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -36,7 +53,7 @@ class UserRepository:
             return None
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, key, value)
-        self.db.commit()
+        self._commit()
         self.db.refresh(obj)
         return obj
 
@@ -62,5 +79,5 @@ class UserRepository:
         self.db.query(User).filter(User.id == user_id).delete(
             synchronize_session=False
         )
-        self.db.commit()
+        self._commit()
         return user
