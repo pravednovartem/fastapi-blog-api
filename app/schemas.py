@@ -11,6 +11,69 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 SLUG_RE = re.compile(r"^[a-z0-9-]+$")
 
 
+# --- Аутентификация ---
+
+class RegisterRequest(BaseModel):
+    """Схема запроса на регистрацию."""
+
+    username: str
+    password: str
+    email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Длина 3..150, только латиница/цифры/подчёркивание."""
+        v = v.strip()
+        if not 3 <= len(v) <= 150:
+            raise ValueError("username должен быть длиной 3..150 символов")
+        if not USERNAME_RE.fullmatch(v):
+            raise ValueError(
+                "username может содержать только A-Z, a-z, 0-9 и _",
+            )
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Минимум 8 символов, должен содержать цифру и букву."""
+        if len(v) < 8:
+            raise ValueError("password должен быть не короче 8 символов")
+        if len(v) > 128:
+            raise ValueError("password не может быть длиннее 128 символов")
+        if not any(c.isalpha() for c in v):
+            raise ValueError("password должен содержать хотя бы одну букву")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("password должен содержать хотя бы одну цифру")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        """Базовая проверка формата email."""
+        if v is None or v == "":
+            return v
+        if not EMAIL_RE.fullmatch(v):
+            raise ValueError("Некорректный формат email")
+        return v
+
+
+class LoginRequest(BaseModel):
+    """Схема запроса на вход."""
+
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    """JWT-токен для клиента."""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
 # --- Пользователи ---
 
 class UserOut(BaseModel):

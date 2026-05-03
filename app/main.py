@@ -2,11 +2,14 @@
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import Response
+from fastapi.security import OAuth2PasswordRequestForm
 
 from sqlalchemy.orm import Session
 
+from .auth import get_current_user
 from .database import get_db
 from .exceptions import AppError
+from .models import User
 from .schemas import (
     CategoryCreate,
     CategoryOut,
@@ -17,13 +20,17 @@ from .schemas import (
     LocationCreate,
     LocationOut,
     LocationUpdate,
+    LoginRequest,
     PostCreate,
     PostOut,
     PostUpdate,
+    RegisterRequest,
+    TokenResponse,
     UserCreate,
     UserOut,
     UserUpdate,
 )
+from .use_cases.auth_service import AuthService
 from .use_cases.category_service import CategoryService
 from .use_cases.comment_service import CommentService
 from .use_cases.location_service import LocationService
@@ -37,11 +44,19 @@ app = FastAPI(
 )
 
 db_dependency = Depends(get_db)
+auth_dependency = Depends(get_current_user)
 
 
 def _http(exc: AppError) -> HTTPException:
     """Преобразовать доменную ошибку в HTTPException."""
-    return HTTPException(status_code=exc.status_code, detail=exc.to_dict())
+    headers = None
+    if exc.status_code == 401:
+        headers = {"WWW-Authenticate": "Bearer"}
+    return HTTPException(
+        status_code=exc.status_code,
+        detail=exc.to_dict(),
+        headers=headers,
+    )
 
 
 # ---------- Ручки ----------
@@ -56,6 +71,39 @@ def root():
 def favicon():
     """Заглушка favicon, чтобы не было 404 в логах."""
     return Response(status_code=204)
+
+
+# --- Аутентификация ---
+
+@app.post("/auth/register", response_model=TokenResponse)
+def register(data: RegisterRequest, db: Session = db_dependency):
+    """Зарегистрировать пользователя и сразу выдать JWT."""
+    try:
+        _, token = AuthService(db).register(data)
+    except AppError as exc:
+        raise _http(exc) from exc
+    return TokenResponse(access_token=token)
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+def login(
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: Session = db_dependency,
+):
+    """Войти по логину/паролю и получить JWT (форма OAuth2)."""
+    try:
+        _, token = AuthService(db).login(
+            LoginRequest(username=form.username, password=form.password),
+        )
+    except AppError as exc:
+        raise _http(exc) from exc
+    return TokenResponse(access_token=token)
+
+
+@app.get("/auth/me", response_model=UserOut)
+def me(current_user: User = auth_dependency):
+    """Вернуть данные текущего пользователя по JWT."""
+    return current_user
 
 
 # --- Категории ---
@@ -82,8 +130,9 @@ def get_category(category_id: int, db: Session = db_dependency):
 def create_category(
     data: CategoryCreate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Создать категорию."""
+    """Создать категорию (требуется JWT)."""
     try:
         return CategoryService(db).create(data)
     except AppError as exc:
@@ -98,8 +147,9 @@ def update_category(
     category_id: int,
     data: CategoryUpdate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Обновить категорию."""
+    """Обновить категорию (требуется JWT)."""
     try:
         return CategoryService(db).update(category_id, data)
     except AppError as exc:
@@ -110,8 +160,9 @@ def update_category(
 def delete_category(
     category_id: int,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Удалить категорию."""
+    """Удалить категорию (требуется JWT)."""
     try:
         CategoryService(db).delete(category_id)
     except AppError as exc:
@@ -146,8 +197,9 @@ def get_location(
 def create_location(
     data: LocationCreate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Создать локацию."""
+    """Создать локацию (требуется JWT)."""
     try:
         return LocationService(db).create(data)
     except AppError as exc:
@@ -162,8 +214,9 @@ def update_location(
     location_id: int,
     data: LocationUpdate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Обновить локацию."""
+    """Обновить локацию (требуется JWT)."""
     try:
         return LocationService(db).update(location_id, data)
     except AppError as exc:
@@ -174,8 +227,9 @@ def update_location(
 def delete_location(
     location_id: int,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Удалить локацию."""
+    """Удалить локацию (требуется JWT)."""
     try:
         LocationService(db).delete(location_id)
     except AppError as exc:
@@ -186,14 +240,21 @@ def delete_location(
 # --- Пользователи ---
 
 @app.get("/users", response_model=list[UserOut])
-def get_users(db: Session = db_dependency):
-    """Список всех пользователей."""
+def get_users(
+    db: Session = db_dependency,
+    current_user: User = auth_dependency,
+):
+    """Список всех пользователей (требуется JWT)."""
     return UserService(db).list()
 
 
 @app.get("/users/{user_id}", response_model=UserOut)
-def get_user(user_id: int, db: Session = db_dependency):
-    """Пользователь по id."""
+def get_user(
+    user_id: int,
+    db: Session = db_dependency,
+    current_user: User = auth_dependency,
+):
+    """Пользователь по id (требуется JWT)."""
     try:
         return UserService(db).get(user_id)
     except AppError as exc:
@@ -204,8 +265,9 @@ def get_user(user_id: int, db: Session = db_dependency):
 def create_user(
     data: UserCreate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Создать пользователя."""
+    """Создать пользователя без пароля (требуется JWT)."""
     try:
         return UserService(db).create(data)
     except AppError as exc:
@@ -220,8 +282,9 @@ def update_user(
     user_id: int,
     data: UserUpdate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Обновить пользователя."""
+    """Обновить пользователя (требуется JWT)."""
     try:
         return UserService(db).update(user_id, data)
     except AppError as exc:
@@ -232,8 +295,9 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Удалить пользователя."""
+    """Удалить пользователя (требуется JWT)."""
     try:
         UserService(db).delete(user_id)
     except AppError as exc:
@@ -262,9 +326,11 @@ def get_post(post_id: int, db: Session = db_dependency):
 def create_post(
     post: PostCreate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Создать публикацию."""
+    """Создать публикацию (автор = текущий пользователь)."""
     try:
+        post.author_id = current_user.id
         return PostService(db).create(post)
     except AppError as exc:
         raise _http(exc) from exc
@@ -278,8 +344,9 @@ def update_post(
     post_id: int,
     post: PostUpdate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Обновить публикацию."""
+    """Обновить публикацию (требуется JWT)."""
     try:
         return PostService(db).update(post_id, post)
     except AppError as exc:
@@ -290,8 +357,9 @@ def update_post(
 def delete_post(
     post_id: int,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Удалить публикацию."""
+    """Удалить публикацию (требуется JWT)."""
     try:
         PostService(db).delete(post_id)
     except AppError as exc:
@@ -326,9 +394,11 @@ def get_comment(
 def create_comment(
     comment: CommentCreate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Создать комментарий."""
+    """Создать комментарий (автор = текущий пользователь)."""
     try:
+        comment.author_id = current_user.id
         return CommentService(db).create(comment)
     except AppError as exc:
         raise _http(exc) from exc
@@ -342,8 +412,9 @@ def update_comment(
     comment_id: int,
     comment: CommentUpdate,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Обновить комментарий."""
+    """Обновить комментарий (требуется JWT)."""
     try:
         return CommentService(db).update(comment_id, comment)
     except AppError as exc:
@@ -354,8 +425,9 @@ def update_comment(
 def delete_comment(
     comment_id: int,
     db: Session = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    """Удалить комментарий."""
+    """Удалить комментарий (требуется JWT)."""
     try:
         CommentService(db).delete(comment_id)
     except AppError as exc:

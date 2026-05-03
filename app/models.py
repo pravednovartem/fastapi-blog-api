@@ -20,10 +20,11 @@ class User(Base):
     __tablename__ = "auth_user"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, nullable=False)
+    username = Column(String, nullable=False, unique=True)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     email = Column(String, nullable=True)
+    password = Column(String, nullable=True)
 
 
 class Category(Base):
