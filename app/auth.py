@@ -1,33 +1,23 @@
 """JWT-аутентификация: хеширование паролей, эмиссия и парсинг токенов."""
 
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from dotenv import load_dotenv
-
+import bcrypt
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
-
 from jose import JWTError, jwt  # type: ignore[import-untyped]
-
-from passlib.context import CryptContext  # type: ignore[import-untyped]
-
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .database import get_db
 from .exceptions import AppError
 from .models import User
 
-load_dotenv()
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
-SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"),
-)
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 _token_dep = Depends(oauth2_scheme)
@@ -40,16 +30,31 @@ class AuthError(AppError):
     status_code = 401
 
 
+def _bcrypt_secret(password: str) -> bytes:
+    """UTF-8 и обрезка до 72 байт — лимит алгоритма bcrypt."""
+    data = password.encode("utf-8")
+    return data if len(data) <= 72 else data[:72]
+
+
 def hash_password(password: str) -> str:
     """Сгенерировать bcrypt-хеш пароля."""
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(
+        _bcrypt_secret(password),
+        bcrypt.gensalt(),
+    ).decode("ascii")
 
 
 def verify_password(plain: str, hashed: Optional[str]) -> bool:
     """Сверить пароль с хешем (False если хеша нет)."""
     if not hashed:
         return False
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(
+            _bcrypt_secret(plain),
+            hashed.encode("ascii"),
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(

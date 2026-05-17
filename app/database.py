@@ -1,26 +1,23 @@
 """Движок БД, фабрика сессий и зависимость для FastAPI."""
 
-import os
-
-from dotenv import load_dotenv
-
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-load_dotenv()
+from .config import settings
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./sqlite.db")
+DATABASE_URL = settings.DATABASE_URL
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
+# connect_args нужны только SQLite (запрет проверки потока).
+engine_kwargs: dict = {}
+if DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=engine,
 )
 
 Base = declarative_base()

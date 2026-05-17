@@ -1,53 +1,98 @@
-# FastAPI + Django SQLite
+# FastAPI Blog
 
-Проект подключается к существующей SQLite базе данных Django и использует репозитории для работы с сущностями.
+REST API блога на FastAPI + SQLAlchemy + Alembic. Аутентификация на JWT,
+конфигурация через `pydantic-settings`, логирование действий пользователя
+в stdout, инфраструктура — Docker + PostgreSQL.
 
 ## Сущности
-- Category
-- Location
-- Post
-- Comment
 
-## База данных и миграции (Alembic)
+- `User` — пользователь и автор контента
+- `Category` — категория публикации
+- `Location` — локация публикации
+- `Post` — публикация
+- `Comment` — комментарий к публикации
 
-Подключение к SQLite задаётся в `app/database.py` и в `alembic.ini` (`sqlite:///./sqlite.db`).
+## Конфигурация
 
-Чтобы получить **пустую** базу с таблицами по моделям:
+Все параметры берутся из переменных окружения / файла `.env`
+(`app/config.py`, класс `Settings`).
 
-1. Удалите файл `sqlite.db` (если он есть).
-2. Выполните `alembic upgrade head` — создастся `sqlite.db` и все таблицы из миграции `create initial tables`.
+| Переменная                   | Значение по умолчанию          | Описание                                            |
+| ---------------------------- | ------------------------------ | --------------------------------------------------- |
+| `DATABASE_URL`               | `sqlite:///./sqlite.db`        | DSN базы данных                                     |
+| `SECRET_KEY`                 | `change-me-in-production`      | Ключ подписи JWT                                    |
+| `ALGORITHM`                  | `HS256`                        | Алгоритм подписи JWT                                |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`| `60`                           | Время жизни access-токена                           |
+| `LOG_LEVEL`                  | `INFO`                         | Уровень логирования (`DEBUG`/`INFO`/`WARNING`/...)  |
+| `APP_HOST`                   | `0.0.0.0`                      | Адрес HTTP-сервера                                  |
+| `APP_PORT`                   | `8000`                         | Порт HTTP-сервера                                   |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `blog` / `blog` / `blog` | Креды контейнера Postgres в `docker-compose.yml` |
 
-Новую миграцию после изменения моделей можно сгенерировать так:  
-`alembic revision --autogenerate -m "описание изменений"`
+Шаблон файла окружения — `.env.example`. Скопируйте его в `.env`
+и при необходимости подкорректируйте значения.
 
-## Первый запуск (подгрузить зависимости и поднять API)
+## Запуск через Docker (рекомендуется)
 
-Рекомендуется виртуальное окружение в корне проекта:
+```bash
+cp .env.example .env   # если .env ещё не создан
+docker compose up --build
+```
+
+Что произойдёт:
+
+1. Поднимется контейнер `db` (PostgreSQL 16) с healthcheck.
+2. Контейнер `app` дождётся готовности БД, выполнит `alembic upgrade head`
+   (миграции применяются автоматически из `entrypoint.sh`) и запустит uvicorn.
+3. API будет доступен на [http://localhost:8000](http://localhost:8000).
+   Документация — [http://localhost:8000/docs](http://localhost:8000/docs).
+
+Логи приложения смотреть так:
+
+```bash
+docker compose logs -f app
+```
+
+Остановить и удалить контейнеры (данные Postgres остаются в томе
+`postgres_data`):
+
+```bash
+docker compose down
+```
+
+## Локальный запуск (без Docker)
 
 ```bash
 python -m venv venv
-```
+source venv/Scripts/activate   # Windows Git Bash
+# или: venv\Scripts\activate.bat (cmd) / venv\Scripts\Activate.ps1 (PowerShell)
 
-Активация:
-
-- **Windows (cmd):** `venv\Scripts\activate.bat`
-- **Windows (PowerShell):** `venv\Scripts\Activate.ps1`
-- **Git Bash / WSL:** `source venv/Scripts/activate` или `source venv/bin/activate`
-
-Дальше из корня репозитория:
-
-```bash
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-После старта документация API: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+По умолчанию используется SQLite (`sqlite:///./sqlite.db`).
 
-## Запуск (кратко)
+## Миграции
+
+Новую миграцию можно сгенерировать после изменения моделей:
 
 ```bash
-pip install -r requirements.txt
+alembic revision --autogenerate -m "описание изменений"
 alembic upgrade head
-uvicorn app.main:app --reload
 ```
+
+В контейнере `alembic upgrade head` запускается автоматически на старте.
+
+## Логирование
+
+`app/logging_config.py` настраивает корневой логгер по `LOG_LEVEL`.
+HTTP-middleware в `app/main.py` пишет на каждый запрос строку вида:
+
+```
+2026-05-17 21:15:42 [INFO] app.access: POST /posts -> 200 [user_id=7] 12.34ms
+```
+
+Если запрос анонимный — будет `[anonymous]`, при некорректном JWT —
+`[invalid_token]`. Логи приложения и uvicorn идут в stdout, чтобы их
+собирал `docker logs` / `docker compose logs`.

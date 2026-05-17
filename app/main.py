@@ -1,14 +1,21 @@
 """Приложение FastAPI: конфигурация API и эндпоинты блога."""
 
-from fastapi import Depends, FastAPI, HTTPException
+import logging
+import time
+from typing import cast
+
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
 
+from jose import JWTError, jwt  # type: ignore[import-untyped]
+
 from sqlalchemy.orm import Session
 
-from .auth import get_current_user
+from .auth import ALGORITHM, SECRET_KEY, get_current_user
 from .database import get_db
 from .exceptions import AppError
+from .logging_config import setup_logging
 from .models import User
 from .schemas import (
     CategoryCreate,
@@ -37,6 +44,11 @@ from .use_cases.location_service import LocationService
 from .use_cases.post_service import PostService
 from .use_cases.user_service import UserService
 
+# Логирование инициализируется до создания приложения, чтобы
+# uvicorn и наш middleware писали в одном формате.
+setup_logging()
+logger = logging.getLogger("app.access")
+
 # Конфигурация API
 app = FastAPI(
     title="Blog API",
@@ -45,6 +57,56 @@ app = FastAPI(
 
 db_dependency = Depends(get_db)
 auth_dependency = Depends(get_current_user)
+oauth2_password_form = Depends()
+
+
+def _extract_user_label(request: Request) -> str:
+    """Достать user_id из JWT, не выбрасывая ошибок (для логов)."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return "anonymous"
+    token = auth_header.split(" ", 1)[1].strip()
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return "invalid_token"
+    sub = payload.get("sub")
+    return f"user_id={sub}" if sub else "anonymous"
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Логировать каждый HTTP-запрос с привязкой к пользователю."""
+    start = time.perf_counter()
+    user_label = _extract_user_label(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.exception(
+            "%s %s -> 500 [%s] %.2fms",
+            request.method,
+            request.url.path,
+            user_label,
+            duration_ms,
+        )
+        raise
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s -> %s [%s] %.2fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        user_label,
+        duration_ms,
+    )
+    return response
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    """Сообщить о старте приложения в общий лог."""
+    logging.getLogger("app").info("Blog API started")
 
 
 def _http(exc: AppError) -> HTTPException:
@@ -87,7 +149,7 @@ def register(data: RegisterRequest, db: Session = db_dependency):
 
 @app.post("/auth/login", response_model=TokenResponse)
 def login(
-    form: OAuth2PasswordRequestForm = Depends(),
+    form: OAuth2PasswordRequestForm = oauth2_password_form,
     db: Session = db_dependency,
 ):
     """Войти по логину/паролю и получить JWT (форма OAuth2)."""
@@ -330,7 +392,7 @@ def create_post(
 ):
     """Создать публикацию (автор = текущий пользователь)."""
     try:
-        post.author_id = current_user.id
+        post.author_id = cast(int, current_user.id)
         return PostService(db).create(post)
     except AppError as exc:
         raise _http(exc) from exc
@@ -398,7 +460,7 @@ def create_comment(
 ):
     """Создать комментарий (автор = текущий пользователь)."""
     try:
-        comment.author_id = current_user.id
+        comment.author_id = cast(int, current_user.id)
         return CommentService(db).create(comment)
     except AppError as exc:
         raise _http(exc) from exc
