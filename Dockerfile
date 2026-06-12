@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Системные зависимости для psycopg2 (libpq) и компиляции wheels.
+# libpq для psycopg2
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -20,7 +20,8 @@ RUN pip install --upgrade pip \
 
 COPY . .
 
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh \
+    && mkdir -p /app/uploads
 
 EXPOSE 8000
 

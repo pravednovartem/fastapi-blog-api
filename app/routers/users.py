@@ -1,42 +1,68 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..repositories.user_repository import UserRepository
-from ..schemas import UserCreate, UserOut, UserUpdate
+from app.deps import app_http_error, auth_dependency, db_dependency
+from app.exceptions import AppError
+from app.models import User
+from app.schemas import UserCreate, UserOut, UserUpdate
+from app.use_cases.user_service import UserService
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("/", response_model=list[UserOut])
-def read_users(db: Session = Depends(get_db)):
-    return UserRepository(db).get_all()
+@router.get("", response_model=list[UserOut])
+async def get_users(
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    return await UserService(db).list()
 
 
 @router.get("/{user_id}", response_model=UserOut)
-def read_user(user_id: int, db: Session = Depends(get_db)):
-    obj = UserRepository(db).get_by_id(user_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="User not found")
-    return obj
+async def get_user(
+    user_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        return await UserService(db).get(user_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
-@router.post("/", response_model=UserOut)
-def create_user(data: UserCreate, db: Session = Depends(get_db)):
-    return UserRepository(db).create(data)
+@router.post("", response_model=UserOut)
+async def create_user(
+    data: UserCreate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        return await UserService(db).create(data)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.put("/{user_id}", response_model=UserOut)
-def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
-    obj = UserRepository(db).update(user_id, data)
-    if not obj:
-        raise HTTPException(status_code=404, detail="User not found")
-    return obj
+async def update_user(
+    user_id: int,
+    data: UserUpdate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        return await UserService(db).update(user_id, data)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    obj = UserRepository(db).delete(user_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="User not found")
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        await UserService(db).delete(user_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
     return {"message": "User deleted successfully"}

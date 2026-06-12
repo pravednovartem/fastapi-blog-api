@@ -1,4 +1,4 @@
-"""create initial tables
+"""Create initial tables.
 
 Revision ID: 94e25a28a3d4
 Revises:

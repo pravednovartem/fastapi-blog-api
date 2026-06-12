@@ -1,44 +1,64 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from typing import cast
 
-from ..database import get_db
-from ..repositories.comment_repository import CommentRepository
-from ..schemas import CommentCreate, CommentOut, CommentUpdate
+from fastapi import APIRouter
+from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter(prefix="/comments", tags=["Comments"])
+from app.deps import app_http_error, auth_dependency, db_dependency
+from app.exceptions import AppError
+from app.models import User
+from app.schemas import CommentCreate, CommentOut, CommentUpdate
+from app.use_cases.comment_service import CommentService
+
+router = APIRouter(prefix="/comments", tags=["comments"])
 
 
-@router.get("/", response_model=list[CommentOut])
-def read_comments(db: Session = Depends(get_db)):
-    return CommentRepository(db).get_all()
+@router.get("", response_model=list[CommentOut])
+async def get_comments(db: AsyncSession = db_dependency):
+    return await CommentService(db).list()
 
 
 @router.get("/{comment_id}", response_model=CommentOut)
-def read_comment(comment_id: int, db: Session = Depends(get_db)):
-    obj = CommentRepository(db).get_by_id(comment_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="Comment not found")
-    return obj
+async def get_comment(comment_id: int, db: AsyncSession = db_dependency):
+    try:
+        return await CommentService(db).get(comment_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
-@router.post("/", response_model=CommentOut)
-def create_comment(comment: CommentCreate, db: Session = Depends(get_db)):
-    return CommentRepository(db).create(comment)
+@router.post("", response_model=CommentOut)
+async def create_comment(
+    comment: CommentCreate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        comment.author_id = cast(int, current_user.id)
+        return await CommentService(db).create(comment)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.put("/{comment_id}", response_model=CommentOut)
-def update_comment(
-    comment_id: int, comment: CommentUpdate, db: Session = Depends(get_db)
+async def update_comment(
+    comment_id: int,
+    comment: CommentUpdate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    updated_comment = CommentRepository(db).update(comment_id, comment)
-    if not updated_comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
-    return updated_comment
+    try:
+        return await CommentService(db).update(comment_id, comment)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.delete("/{comment_id}")
-def delete_comment(comment_id: int, db: Session = Depends(get_db)):
-    deleted_comment = CommentRepository(db).delete(comment_id)
-    if not deleted_comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
+async def delete_comment(
+    comment_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        await CommentService(db).delete(comment_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
     return {"message": "Comment deleted successfully"}

@@ -1,75 +1,66 @@
-"""Репозиторий для локаций блога."""
-
 from app.exceptions import ConflictError, DatabaseError
 from app.models import Location, Post
 from app.schemas import LocationCreate, LocationUpdate
 
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class LocationRepository:
-    """CRUD-операции с таблицей локаций."""
-
-    def __init__(self, db: Session):
-        """Принять сессию SQLAlchemy."""
+    def __init__(self, db: AsyncSession):
         self.db = db
 
-    def _commit(self) -> None:
-        """Закоммитить транзакцию, преобразовав SQL-ошибки в доменные."""
+    async def _commit(self) -> None:
         try:
-            self.db.commit()
+            await self.db.commit()
         except IntegrityError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             raise ConflictError(
                 "Нарушение целостности данных локации",
             ) from exc
         except SQLAlchemyError as exc:
-            self.db.rollback()
+            await self.db.rollback()
             raise DatabaseError(
                 "Сбой БД при работе с локацией",
             ) from exc
 
-    def get_all(self):
-        """Вернуть все локации."""
-        return self.db.query(Location).all()
+    async def get_all(self):
+        result = await self.db.execute(select(Location))
+        return list(result.scalars().all())
 
-    def get_by_id(self, location_id: int):
-        """Вернуть локацию по id или None."""
-        return (
-            self.db.query(Location)
-            .filter(Location.id == location_id)
-            .first()
+    async def get_by_id(self, location_id: int):
+        result = await self.db.execute(
+            select(Location).where(Location.id == location_id),
         )
+        return result.scalar_one_or_none()
 
-    def create(self, data: LocationCreate):
-        """Создать локацию из валидированных данных."""
+    async def create(self, data: LocationCreate):
         obj = Location(**data.model_dump())
         self.db.add(obj)
-        self._commit()
-        self.db.refresh(obj)
+        await self._commit()
+        await self.db.refresh(obj)
         return obj
 
-    def update(self, location_id: int, data: LocationUpdate):
-        """Обновить поля; вернуть None если не найдена."""
-        obj = self.get_by_id(location_id)
+    async def update(self, location_id: int, data: LocationUpdate):
+        obj = await self.get_by_id(location_id)
         if not obj:
             return None
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, key, value)
-        self._commit()
-        self.db.refresh(obj)
+        await self._commit()
+        await self.db.refresh(obj)
         return obj
 
-    def delete(self, location_id: int):
-        """Удалить локацию; обнулить location_id у постов."""
-        obj = self.get_by_id(location_id)
+    async def delete(self, location_id: int):
+        obj = await self.get_by_id(location_id)
         if not obj:
             return None
-        self.db.query(Post).filter(Post.location_id == location_id).update(
-            {Post.location_id: None},
-            synchronize_session=False,
+        await self.db.execute(
+            update(Post)
+            .where(Post.location_id == location_id)
+            .values(location_id=None),
         )
-        self.db.delete(obj)
-        self._commit()
+        await self.db.delete(obj)
+        await self._commit()
         return obj

@@ -1,4 +1,4 @@
-"""JWT-аутентификация: хеширование паролей, эмиссия и парсинг токенов."""
+"""JWT-аутентификация."""
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -7,7 +7,8 @@ import bcrypt
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt  # type: ignore[import-untyped]
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
 from .database import get_db
@@ -25,19 +26,16 @@ _db_dep = Depends(get_db)
 
 
 class AuthError(AppError):
-    """Ошибка аутентификации/авторизации."""
-
     status_code = 401
 
 
 def _bcrypt_secret(password: str) -> bytes:
-    """UTF-8 и обрезка до 72 байт — лимит алгоритма bcrypt."""
+    # bcrypt обрезает пароль до 72 байт
     data = password.encode("utf-8")
     return data if len(data) <= 72 else data[:72]
 
 
 def hash_password(password: str) -> str:
-    """Сгенерировать bcrypt-хеш пароля."""
     return bcrypt.hashpw(
         _bcrypt_secret(password),
         bcrypt.gensalt(),
@@ -45,7 +43,6 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: Optional[str]) -> bool:
-    """Сверить пароль с хешем (False если хеша нет)."""
     if not hashed:
         return False
     try:
@@ -61,7 +58,6 @@ def create_access_token(
     subject: str,
     expires_minutes: Optional[int] = None,
 ) -> str:
-    """Эмитировать JWT с полями sub, iat, exp."""
     minutes = expires_minutes or ACCESS_TOKEN_EXPIRE_MINUTES
     now = datetime.now(timezone.utc)
     payload = {
@@ -73,7 +69,6 @@ def create_access_token(
 
 
 def decode_token(token: str) -> dict:
-    """Распарсить JWT, поднять AuthError при ошибке."""
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError as exc:
@@ -83,11 +78,10 @@ def decode_token(token: str) -> dict:
         ) from exc
 
 
-def get_current_user(
+async def get_current_user(
     token: str = _token_dep,
-    db: Session = _db_dep,
+    db: AsyncSession = _db_dep,
 ) -> User:
-    """FastAPI-зависимость: вернуть текущего пользователя по JWT."""
     payload = decode_token(token)
     sub = payload.get("sub")
     if not sub:
@@ -96,7 +90,8 @@ def get_current_user(
         user_id = int(sub)
     except (TypeError, ValueError) as exc:
         raise AuthError("Некорректный sub в токене") from exc
-    user = db.query(User).filter(User.id == user_id).first()
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
     if not user:
         raise AuthError("Пользователь из токена не найден", id=user_id)
     return user

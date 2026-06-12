@@ -1,4 +1,4 @@
-"""ORM-модели блога (совместимы со схемой Django)."""
+"""ORM-модели блога."""
 
 from sqlalchemy import (
     Boolean,
@@ -15,8 +15,6 @@ from .database import Base
 
 
 class User(Base):
-    """Пользователь (таблица auth_user)."""
-
     __tablename__ = "auth_user"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -28,8 +26,6 @@ class User(Base):
 
 
 class Category(Base):
-    """Категория блога."""
-
     __tablename__ = "blog_category"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -41,8 +37,6 @@ class Category(Base):
 
 
 class Location(Base):
-    """Локация блога."""
-
     __tablename__ = "blog_location"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -52,8 +46,6 @@ class Location(Base):
 
 
 class Post(Base):
-    """Публикация блога."""
-
     __tablename__ = "blog_post"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -82,8 +74,6 @@ class Post(Base):
 
 
 class Comment(Base):
-    """Комментарий к публикации."""
-
     __tablename__ = "blog_comment"
 
     id = Column(Integer, primary_key=True, index=True)

@@ -1,44 +1,61 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
-from ..repositories.location_repository import LocationRepository
-from ..schemas import LocationCreate, LocationOut, LocationUpdate
+from app.deps import app_http_error, auth_dependency, db_dependency
+from app.exceptions import AppError
+from app.models import User
+from app.schemas import LocationCreate, LocationOut, LocationUpdate
+from app.use_cases.location_service import LocationService
 
-router = APIRouter(prefix="/locations", tags=["Locations"])
+router = APIRouter(prefix="/locations", tags=["locations"])
 
 
-@router.get("/", response_model=list[LocationOut])
-def read_locations(db: Session = Depends(get_db)):
-    return LocationRepository(db).get_all()
+@router.get("", response_model=list[LocationOut])
+async def get_locations(db: AsyncSession = db_dependency):
+    return await LocationService(db).list()
 
 
 @router.get("/{location_id}", response_model=LocationOut)
-def read_location(location_id: int, db: Session = Depends(get_db)):
-    obj = LocationRepository(db).get_by_id(location_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="Location not found")
-    return obj
+async def get_location(location_id: int, db: AsyncSession = db_dependency):
+    try:
+        return await LocationService(db).get(location_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
-@router.post("/", response_model=LocationOut)
-def create_location(data: LocationCreate, db: Session = Depends(get_db)):
-    return LocationRepository(db).create(data)
+@router.post("", response_model=LocationOut)
+async def create_location(
+    data: LocationCreate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        return await LocationService(db).create(data)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.put("/{location_id}", response_model=LocationOut)
-def update_location(
-    location_id: int, data: LocationUpdate, db: Session = Depends(get_db)
+async def update_location(
+    location_id: int,
+    data: LocationUpdate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
 ):
-    obj = LocationRepository(db).update(location_id, data)
-    if not obj:
-        raise HTTPException(status_code=404, detail="Location not found")
-    return obj
+    try:
+        return await LocationService(db).update(location_id, data)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.delete("/{location_id}")
-def delete_location(location_id: int, db: Session = Depends(get_db)):
-    obj = LocationRepository(db).delete(location_id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="Location not found")
+async def delete_location(
+    location_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        await LocationService(db).delete(location_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
     return {"message": "Location deleted successfully"}

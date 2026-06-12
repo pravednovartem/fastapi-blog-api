@@ -1,4 +1,4 @@
-"""Pydantic-схемы для валидации запросов и ответов API."""
+"""Pydantic-схемы запросов и ответов."""
 
 import re
 from datetime import datetime, timedelta, timezone
@@ -11,10 +11,18 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 SLUG_RE = re.compile(r"^[a-z0-9-]+$")
 
 
+def _to_naive_utc(value: Optional[datetime]) -> Optional[datetime]:
+    # PostgreSQL: timestamp without time zone
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
 # --- Аутентификация ---
 
 class RegisterRequest(BaseModel):
-    """Схема запроса на регистрацию."""
 
     username: str
     password: str
@@ -61,14 +69,12 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Схема запроса на вход."""
 
     username: str
     password: str
 
 
 class TokenResponse(BaseModel):
-    """JWT-токен для клиента."""
 
     access_token: str
     token_type: str = "bearer"
@@ -77,7 +83,6 @@ class TokenResponse(BaseModel):
 # --- Пользователи ---
 
 class UserOut(BaseModel):
-    """Схема ответа: пользователь."""
 
     id: int
     username: str
@@ -86,13 +91,10 @@ class UserOut(BaseModel):
     email: Optional[str] = None
 
     class Config:
-        """Настройки Pydantic."""
-
         from_attributes = True
 
 
 class UserCreate(BaseModel):
-    """Схема создания пользователя."""
 
     username: str
     first_name: Optional[str] = None
@@ -124,7 +126,6 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    """Схема обновления пользователя."""
 
     username: Optional[str] = None
     first_name: Optional[str] = None
@@ -160,7 +161,6 @@ class UserUpdate(BaseModel):
 # --- Категории ---
 
 class CategoryOut(BaseModel):
-    """Схема ответа: категория."""
 
     id: int
     title: str
@@ -170,13 +170,10 @@ class CategoryOut(BaseModel):
     created_at: Optional[datetime] = None
 
     class Config:
-        """Настройки Pydantic."""
-
         from_attributes = True
 
 
 class CategoryCreate(BaseModel):
-    """Схема создания категории."""
 
     title: str
     description: str
@@ -217,9 +214,13 @@ class CategoryCreate(BaseModel):
             )
         return v
 
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_naive_utc(v)
+
 
 class CategoryUpdate(BaseModel):
-    """Схема обновления категории."""
 
     title: Optional[str] = None
     description: Optional[str] = None
@@ -242,11 +243,15 @@ class CategoryUpdate(BaseModel):
             )
         return v
 
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_naive_utc(v)
+
 
 # --- Локации ---
 
 class LocationOut(BaseModel):
-    """Схема ответа: локация."""
 
     id: int
     name: str
@@ -254,13 +259,10 @@ class LocationOut(BaseModel):
     created_at: Optional[datetime] = None
 
     class Config:
-        """Настройки Pydantic."""
-
         from_attributes = True
 
 
 class LocationCreate(BaseModel):
-    """Схема создания локации."""
 
     name: str
     is_published: Optional[bool] = True
@@ -277,9 +279,13 @@ class LocationCreate(BaseModel):
             raise ValueError("name не может быть длиннее 256 символов")
         return v
 
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_naive_utc(v)
+
 
 class LocationUpdate(BaseModel):
-    """Схема обновления локации."""
 
     name: Optional[str] = None
     is_published: Optional[bool] = None
@@ -298,11 +304,15 @@ class LocationUpdate(BaseModel):
             raise ValueError("name не может быть длиннее 256 символов")
         return v
 
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_naive_utc(v)
+
 
 # --- Публикации ---
 
 class PostOut(BaseModel):
-    """Схема ответа: публикация."""
 
     id: int
     title: str
@@ -316,13 +326,10 @@ class PostOut(BaseModel):
     created_at: Optional[datetime] = None
 
     class Config:
-        """Настройки Pydantic."""
-
         from_attributes = True
 
 
 class PostCreate(BaseModel):
-    """Схема создания публикации."""
 
     title: str
     text: str
@@ -364,11 +371,15 @@ class PostCreate(BaseModel):
             raise ValueError(
                 "pub_date не может быть более чем на сутки в прошлом",
             )
-        return v
+        return _to_naive_utc(v_aware)
+
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_naive_utc(v)
 
 
 class PostUpdate(BaseModel):
-    """Схема обновления публикации."""
 
     title: Optional[str] = None
     text: Optional[str] = None
@@ -404,11 +415,28 @@ class PostUpdate(BaseModel):
             raise ValueError("text не может быть пустым")
         return v
 
+    @field_validator("pub_date")
+    @classmethod
+    def validate_pub_date(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is None:
+            return v
+        now = datetime.now(timezone.utc)
+        v_aware = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+        if v_aware < now - timedelta(days=1):
+            raise ValueError(
+                "pub_date не может быть более чем на сутки в прошлом",
+            )
+        return _to_naive_utc(v_aware)
+
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_naive_utc(v)
+
 
 # --- Комментарии ---
 
 class CommentOut(BaseModel):
-    """Схема ответа: комментарий."""
 
     id: int
     text: str
@@ -417,13 +445,10 @@ class CommentOut(BaseModel):
     post_id: int
 
     class Config:
-        """Настройки Pydantic."""
-
         from_attributes = True
 
 
 class CommentCreate(BaseModel):
-    """Схема создания комментария."""
 
     text: str
     post_id: int
@@ -441,9 +466,13 @@ class CommentCreate(BaseModel):
             raise ValueError("text не может быть длиннее 5000 символов")
         return v
 
+    @field_validator("created_at")
+    @classmethod
+    def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return _to_naive_utc(v)
+
 
 class CommentUpdate(BaseModel):
-    """Схема обновления комментария."""
 
     text: str
 

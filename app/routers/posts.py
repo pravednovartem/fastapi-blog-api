@@ -1,42 +1,85 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from typing import cast
 
-from ..database import get_db
-from ..repositories.post_repository import PostRepository
-from ..schemas import PostCreate, PostOut, PostUpdate
+from fastapi import APIRouter, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter(prefix="/posts", tags=["Posts"])
+from app.deps import (
+    app_http_error,
+    auth_dependency,
+    db_dependency,
+    image_file_dep,
+    upload_path,
+)
+from app.exceptions import AppError
+from app.models import User
+from app.schemas import PostCreate, PostOut, PostUpdate
+from app.storage import save_post_image
+from app.use_cases.post_service import PostService
+
+router = APIRouter(prefix="/posts", tags=["posts"])
 
 
-@router.get("/", response_model=list[PostOut])
-def read_posts(db: Session = Depends(get_db)):
-    return PostRepository(db).get_all()
+@router.get("", response_model=list[PostOut])
+async def get_posts(db: AsyncSession = db_dependency):
+    return await PostService(db).list()
 
 
 @router.get("/{post_id}", response_model=PostOut)
-def read_post(post_id: int, db: Session = Depends(get_db)):
-    post = PostRepository(db).get_by_id(post_id)
-    if not post:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return post
+async def get_post(post_id: int, db: AsyncSession = db_dependency):
+    try:
+        return await PostService(db).get(post_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
-@router.post("/", response_model=PostOut)
-def create_post(post: PostCreate, db: Session = Depends(get_db)):
-    return PostRepository(db).create(post)
+@router.post("", response_model=PostOut)
+async def create_post(
+    post: PostCreate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        post.author_id = cast(int, current_user.id)
+        return await PostService(db).create(post)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.put("/{post_id}", response_model=PostOut)
-def update_post(post_id: int, post: PostUpdate, db: Session = Depends(get_db)):
-    updated_post = PostRepository(db).update(post_id, post)
-    if not updated_post:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return updated_post
+async def update_post(
+    post_id: int,
+    post: PostUpdate,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        return await PostService(db).update(post_id, post)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
+
+
+@router.post("/{post_id}/image", response_model=PostOut)
+async def upload_post_image(
+    post_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+    image: UploadFile = image_file_dep,
+):
+    try:
+        image_url = await save_post_image(upload_path, image)
+        return await PostService(db).attach_image(post_id, image_url)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
 
 
 @router.delete("/{post_id}")
-def delete_post(post_id: int, db: Session = Depends(get_db)):
-    deleted_post = PostRepository(db).delete(post_id)
-    if not deleted_post:
-        raise HTTPException(status_code=404, detail="Post not found")
+async def delete_post(
+    post_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        await PostService(db).delete(post_id)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
     return {"message": "Post deleted successfully"}

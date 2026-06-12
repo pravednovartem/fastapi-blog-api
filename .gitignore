@@ -27,3 +27,5 @@ env/
 .pytest_cache/
 
 sqlite.db
+
+uploads/

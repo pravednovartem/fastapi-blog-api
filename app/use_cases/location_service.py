@@ -1,28 +1,21 @@
-"""Use-cases для локаций."""
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import AppError, NotFoundError
 from app.repositories.location_repository import LocationRepository
 from app.schemas import LocationCreate, LocationUpdate
 
-from sqlalchemy.orm import Session
-
 
 class LocationService:
-    """Бизнес-операции над локациями с обогащением ошибок."""
-
     entity = "Location"
 
-    def __init__(self, db: Session):
-        """Создать репозиторий на базе сессии."""
+    def __init__(self, db: AsyncSession):
         self.repo = LocationRepository(db)
 
-    def list(self):
-        """Вернуть все локации."""
-        return self.repo.get_all()
+    async def list(self):
+        return await self.repo.get_all()
 
-    def get(self, location_id: int):
-        """Вернуть локацию по id или поднять NotFoundError."""
-        obj = self.repo.get_by_id(location_id)
+    async def get(self, location_id: int):
+        obj = await self.repo.get_by_id(location_id)
         if not obj:
             raise NotFoundError(
                 "Локация не найдена",
@@ -31,19 +24,17 @@ class LocationService:
             )
         return obj
 
-    def create(self, data: LocationCreate):
-        """Создать локацию, обогащая ошибки контекстом."""
+    async def create(self, data: LocationCreate):
         try:
-            return self.repo.create(data)
+            return await self.repo.create(data)
         except AppError as exc:
             exc.context.setdefault("entity", self.entity)
             exc.context["operation"] = "create"
             raise
 
-    def update(self, location_id: int, data: LocationUpdate):
-        """Обновить локацию по id."""
+    async def update(self, location_id: int, data: LocationUpdate):
         try:
-            obj = self.repo.update(location_id, data)
+            obj = await self.repo.update(location_id, data)
         except AppError as exc:
             exc.context.setdefault("entity", self.entity)
             exc.context.update(operation="update", id=location_id)
@@ -56,10 +47,9 @@ class LocationService:
             )
         return obj
 
-    def delete(self, location_id: int):
-        """Удалить локацию по id."""
+    async def delete(self, location_id: int):
         try:
-            obj = self.repo.delete(location_id)
+            obj = await self.repo.delete(location_id)
         except AppError as exc:
             exc.context.setdefault("entity", self.entity)
             exc.context.update(operation="delete", id=location_id)

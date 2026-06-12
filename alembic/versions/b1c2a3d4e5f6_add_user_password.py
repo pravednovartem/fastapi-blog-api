@@ -19,7 +19,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Добавить колонку password и уникальный индекс на username."""
     with op.batch_alter_table('auth_user') as batch_op:
         batch_op.add_column(sa.Column('password', sa.String(), nullable=True))
         batch_op.create_unique_constraint(
@@ -29,7 +28,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Откатить изменения: убрать password и уникальность username."""
     with op.batch_alter_table('auth_user') as batch_op:
         batch_op.drop_constraint('uq_auth_user_username', type_='unique')
         batch_op.drop_column('password')

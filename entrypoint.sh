@@ -1,7 +1,6 @@
 #!/bin/sh
 set -e
 
-# Ждём, пока БД станет доступна (только для не-SQLite).
 python <<'PYEOF'
 import os
 import sys
@@ -10,7 +9,11 @@ import time
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 
-url = os.environ.get("DATABASE_URL", "sqlite:///./sqlite.db")
+from app.config import to_sync_database_url
+
+url = to_sync_database_url(
+    os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./sqlite.db"),
+)
 if url.startswith("sqlite"):
     sys.exit(0)
 

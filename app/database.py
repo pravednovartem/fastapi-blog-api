@@ -1,32 +1,35 @@
-"""Движок БД, фабрика сессий и зависимость для FastAPI."""
+"""Async SQLAlchemy и сессия БД."""
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import declarative_base
 
 from .config import settings
 
-DATABASE_URL = settings.DATABASE_URL
+DATABASE_URL = settings.async_database_url
+SYNC_DATABASE_URL = settings.sync_database_url
 
-# connect_args нужны только SQLite (запрет проверки потока).
-engine_kwargs: dict = {}
-if DATABASE_URL.startswith("sqlite"):
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
+engine = create_async_engine(DATABASE_URL, echo=False)
 
-engine = create_engine(DATABASE_URL, **engine_kwargs)
-
-SessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
     autocommit=False,
     autoflush=False,
-    bind=engine,
 )
 
 Base = declarative_base()
 
 
-def get_db():
-    """Создать сессию БД и закрыть после запроса."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
