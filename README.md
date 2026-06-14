@@ -2,7 +2,7 @@
 
 Финальный проект курса: REST API блога на FastAPI. Всё асинхронно, в Docker
 поднимается PostgreSQL, локально можно работать через SQLite. Есть JWT,
-Alembic, логирование запросов и загрузка одной картинки к посту.
+Alembic, логирование запросов, refresh-токены и несколько картинок к посту.
 
 ## Быстрый старт
 
@@ -44,6 +44,9 @@ uvicorn app.main:app --reload
 ## Заметки
 
 - Настройки — в `.env.example` (`DATABASE_URL`, `SECRET_KEY`, `UPLOAD_DIR` и др.).
-- Картинка к посту: сначала `POST /posts`, потом `POST /posts/{id}/image`
-  (поле `image`, jpg/png/gif/webp, до 5 MB). URL будет в поле `image` поста.
+- Auth: `login`/`register` отдают `access_token` + `refresh_token`.
+  Обновление: `POST /auth/refresh` с телом `{"refresh_token": "..."}`.
+  Выход: `POST /auth/logout` с тем же телом.
+- Картинки к посту: `POST /posts/{id}/image` или `/images` (до 10 штук).
+  Список в поле `images`, удаление: `DELETE /posts/{id}/images/{image_id}`.
 - Новая миграция: `alembic revision --autogenerate -m "..."`, затем `alembic upgrade head`.

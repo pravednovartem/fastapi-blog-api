@@ -5,6 +5,8 @@ from app.repositories.post_repository import PostRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas import PostCreate, PostUpdate
 
+MAX_IMAGES_PER_POST = 10
+
 
 class PostService:
     entity = "Post"
@@ -56,12 +58,19 @@ class PostService:
             )
         return obj
 
-    async def attach_image(self, post_id: int, image_url: str):
+    async def add_image(self, post_id: int, image_url: str):
+        post = await self.get(post_id)
+        if len(post.images) >= MAX_IMAGES_PER_POST:
+            raise ValidationError(
+                f"Не более {MAX_IMAGES_PER_POST} изображений на пост",
+                entity=self.entity,
+                field="image",
+            )
         try:
-            obj = await self.repo.set_image(post_id, image_url)
+            obj = await self.repo.add_image(post_id, image_url)
         except AppError as exc:
             exc.context.setdefault("entity", self.entity)
-            exc.context.update(operation="attach_image", id=post_id)
+            exc.context.update(operation="add_image", id=post_id)
             raise
         if not obj:
             raise NotFoundError(
@@ -69,6 +78,22 @@ class PostService:
                 entity=self.entity,
                 id=post_id,
             )
+        return obj
+
+    async def delete_image(self, post_id: int, image_id: int):
+        try:
+            result = await self.repo.delete_image(post_id, image_id)
+        except AppError as exc:
+            exc.context.setdefault("entity", self.entity)
+            exc.context.update(operation="delete_image", id=post_id)
+            raise
+        if not result:
+            raise NotFoundError(
+                "Изображение не найдено",
+                entity=self.entity,
+                id=image_id,
+            )
+        obj, _image_url = result
         return obj
 
     async def delete(self, post_id: int):

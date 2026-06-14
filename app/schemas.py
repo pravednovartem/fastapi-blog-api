@@ -20,8 +20,6 @@ def _to_naive_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value
 
 
-# --- Аутентификация ---
-
 class RegisterRequest(BaseModel):
 
     username: str
@@ -33,7 +31,6 @@ class RegisterRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
-        """Длина 3..150, только латиница/цифры/подчёркивание."""
         v = v.strip()
         if not 3 <= len(v) <= 150:
             raise ValueError("username должен быть длиной 3..150 символов")
@@ -46,7 +43,6 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        """Минимум 8 символов, должен содержать цифру и букву."""
         if len(v) < 8:
             raise ValueError("password должен быть не короче 8 символов")
         if len(v) > 128:
@@ -60,7 +56,6 @@ class RegisterRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        """Базовая проверка формата email."""
         if v is None or v == "":
             return v
         if not EMAIL_RE.fullmatch(v):
@@ -77,10 +72,14 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 
-# --- Пользователи ---
+class RefreshTokenRequest(BaseModel):
+
+    refresh_token: str
+
 
 class UserOut(BaseModel):
 
@@ -104,7 +103,6 @@ class UserCreate(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
-        """Длина 3..150, только латиница/цифры/подчёркивание."""
         v = v.strip()
         if not 3 <= len(v) <= 150:
             raise ValueError("username должен быть длиной 3..150 символов")
@@ -117,7 +115,6 @@ class UserCreate(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        """Базовая проверка формата email."""
         if v is None or v == "":
             return v
         if not EMAIL_RE.fullmatch(v):
@@ -135,7 +132,6 @@ class UserUpdate(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: Optional[str]) -> Optional[str]:
-        """Если задан — те же правила, что и при создании."""
         if v is None:
             return v
         v = v.strip()
@@ -150,15 +146,12 @@ class UserUpdate(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        """Базовая проверка формата email."""
         if v is None or v == "":
             return v
         if not EMAIL_RE.fullmatch(v):
             raise ValueError("Некорректный формат email")
         return v
 
-
-# --- Категории ---
 
 class CategoryOut(BaseModel):
 
@@ -184,7 +177,6 @@ class CategoryCreate(BaseModel):
     @field_validator("title")
     @classmethod
     def validate_title(cls, v: str) -> str:
-        """Не пусто, длина 1..256."""
         v = v.strip()
         if not v:
             raise ValueError("title не может быть пустым")
@@ -195,7 +187,6 @@ class CategoryCreate(BaseModel):
     @field_validator("description")
     @classmethod
     def validate_description(cls, v: str) -> str:
-        """Не пусто."""
         v = v.strip()
         if not v:
             raise ValueError("description не может быть пустым")
@@ -204,7 +195,6 @@ class CategoryCreate(BaseModel):
     @field_validator("slug")
     @classmethod
     def validate_slug(cls, v: str) -> str:
-        """Только a-z, 0-9 и дефис, длина 1..200."""
         v = v.strip()
         if not 1 <= len(v) <= 200:
             raise ValueError("slug должен быть длиной 1..200 символов")
@@ -231,7 +221,6 @@ class CategoryUpdate(BaseModel):
     @field_validator("slug")
     @classmethod
     def validate_slug(cls, v: Optional[str]) -> Optional[str]:
-        """Если задан — те же правила, что и при создании."""
         if v is None:
             return v
         v = v.strip()
@@ -248,8 +237,6 @@ class CategoryUpdate(BaseModel):
     def normalize_created_at(cls, v: Optional[datetime]) -> Optional[datetime]:
         return _to_naive_utc(v)
 
-
-# --- Локации ---
 
 class LocationOut(BaseModel):
 
@@ -271,7 +258,6 @@ class LocationCreate(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        """Не пусто, длина 1..256."""
         v = v.strip()
         if not v:
             raise ValueError("name не может быть пустым")
@@ -294,7 +280,6 @@ class LocationUpdate(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: Optional[str]) -> Optional[str]:
-        """Если задано — не пусто и не длиннее 256."""
         if v is None:
             return v
         v = v.strip()
@@ -310,7 +295,16 @@ class LocationUpdate(BaseModel):
         return _to_naive_utc(v)
 
 
-# --- Публикации ---
+class PostImageOut(BaseModel):
+
+    id: int
+    image_url: str
+    sort_order: int
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 
 class PostOut(BaseModel):
 
@@ -319,6 +313,7 @@ class PostOut(BaseModel):
     text: str
     pub_date: datetime
     image: Optional[str] = None
+    images: list[PostImageOut] = []
     author_id: int
     location_id: Optional[int] = None
     category_id: Optional[int] = None
@@ -344,7 +339,6 @@ class PostCreate(BaseModel):
     @field_validator("title")
     @classmethod
     def validate_title(cls, v: str) -> str:
-        """Не пусто, длина 1..256."""
         v = v.strip()
         if not v:
             raise ValueError("title не может быть пустым")
@@ -355,7 +349,6 @@ class PostCreate(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: str) -> str:
-        """Текст публикации не может быть пустым."""
         v = v.strip()
         if not v:
             raise ValueError("text не может быть пустым")
@@ -364,7 +357,6 @@ class PostCreate(BaseModel):
     @field_validator("pub_date")
     @classmethod
     def validate_pub_date(cls, v: datetime) -> datetime:
-        """Запрещаем даты дальше суток в прошлом."""
         now = datetime.now(timezone.utc)
         v_aware = v if v.tzinfo else v.replace(tzinfo=timezone.utc)
         if v_aware < now - timedelta(days=1):
@@ -394,7 +386,6 @@ class PostUpdate(BaseModel):
     @field_validator("title")
     @classmethod
     def validate_title(cls, v: Optional[str]) -> Optional[str]:
-        """Если задан — не пусто и не длиннее 256."""
         if v is None:
             return v
         v = v.strip()
@@ -407,7 +398,6 @@ class PostUpdate(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: Optional[str]) -> Optional[str]:
-        """Если задан — не пусто."""
         if v is None:
             return v
         v = v.strip()
@@ -434,8 +424,6 @@ class PostUpdate(BaseModel):
         return _to_naive_utc(v)
 
 
-# --- Комментарии ---
-
 class CommentOut(BaseModel):
 
     id: int
@@ -458,7 +446,6 @@ class CommentCreate(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: str) -> str:
-        """Не пусто и не длиннее 5000 символов."""
         v = v.strip()
         if not v:
             raise ValueError("text не может быть пустым")
@@ -479,7 +466,6 @@ class CommentUpdate(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, v: str) -> str:
-        """Не пусто и не длиннее 5000 символов."""
         v = v.strip()
         if not v:
             raise ValueError("text не может быть пустым")

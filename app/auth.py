@@ -1,5 +1,8 @@
-"""JWT-аутентификация."""
+"""JWT-аутентификация и refresh-токены."""
+# flake8: noqa: D101, D103
 
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -18,6 +21,7 @@ from .models import User
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -62,10 +66,25 @@ def create_access_token(
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(subject),
+        "type": "access",
         "iat": now,
         "exp": now + timedelta(minutes=minutes),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def generate_refresh_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def refresh_token_expires_at() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+        days=REFRESH_TOKEN_EXPIRE_DAYS,
+    )
 
 
 def decode_token(token: str) -> dict:
@@ -83,6 +102,8 @@ async def get_current_user(
     db: AsyncSession = _db_dep,
 ) -> User:
     payload = decode_token(token)
+    if payload.get("type") not in (None, "access"):
+        raise AuthError("Неверный тип токена")
     sub = payload.get("sub")
     if not sub:
         raise AuthError("Токен не содержит идентификатор пользователя")

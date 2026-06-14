@@ -22,7 +22,6 @@ def setup_logging() -> None:
     root.addHandler(handler)
     root.setLevel(level)
 
-    # логи uvicorn через общий формат
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         uv_logger = logging.getLogger(name)
         uv_logger.handlers.clear()

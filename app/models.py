@@ -24,6 +24,24 @@ class User(Base):
     email = Column(String, nullable=True)
     password = Column(String, nullable=True)
 
+    refresh_tokens = relationship(
+        "RefreshToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class RefreshToken(Base):
+    __tablename__ = "auth_refresh_token"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("auth_user.id"), nullable=False)
+    token_hash = Column(String, nullable=False, unique=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="refresh_tokens")
+
 
 class Category(Base):
     __tablename__ = "blog_category"
@@ -71,6 +89,24 @@ class Post(Base):
     author = relationship("User")
     location = relationship("Location")
     category = relationship("Category")
+    images = relationship(
+        "PostImage",
+        back_populates="post",
+        cascade="all, delete-orphan",
+        order_by="PostImage.sort_order",
+    )
+
+
+class PostImage(Base):
+    __tablename__ = "blog_post_image"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("blog_post.id"), nullable=False)
+    image_url = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=True)
+
+    post = relationship("Post", back_populates="images")
 
 
 class Comment(Base):

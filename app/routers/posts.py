@@ -1,3 +1,6 @@
+"""Эндпоинты постов."""
+# flake8: noqa: D103
+
 from typing import cast
 
 from fastapi import APIRouter, UploadFile
@@ -67,7 +70,34 @@ async def upload_post_image(
 ):
     try:
         image_url = await save_post_image(upload_path, image)
-        return await PostService(db).attach_image(post_id, image_url)
+        return await PostService(db).add_image(post_id, image_url)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
+
+
+@router.post("/{post_id}/images", response_model=PostOut)
+async def upload_post_images(
+    post_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+    image: UploadFile = image_file_dep,
+):
+    try:
+        image_url = await save_post_image(upload_path, image)
+        return await PostService(db).add_image(post_id, image_url)
+    except AppError as exc:
+        raise app_http_error(exc) from exc
+
+
+@router.delete("/{post_id}/images/{image_id}", response_model=PostOut)
+async def delete_post_image(
+    post_id: int,
+    image_id: int,
+    db: AsyncSession = db_dependency,
+    current_user: User = auth_dependency,
+):
+    try:
+        return await PostService(db).delete_image(post_id, image_id)
     except AppError as exc:
         raise app_http_error(exc) from exc
 
